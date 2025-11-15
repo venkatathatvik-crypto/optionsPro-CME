@@ -6,8 +6,10 @@ import authRoutes from './src/routes/auth.js';
 import userRoutes from './src/routes/user.js';
 import googleRoutes from './src/routes/google.js';
 import { initFirebaseAdmin } from './src/firebaseAdmin.js';
+import http from 'http';
 
-dotenv.config();
+// Explicit .env path for consistent ESM behavior
+dotenv.config({ path: './.env' });
 
 const app = express();
 
@@ -26,8 +28,19 @@ app.use(
   })
 );
 
-const PORT = process.env.PORT || 3001;
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/optionspro';
+const PORT = Number(process.env.PORT) || 3001;
+const MONGODB_URI = process.env.MONGODB_URI || '';
+const JWT_SECRET = process.env.JWT_SECRET || '';
+
+// Basic env validation (required in this project)
+if (!MONGODB_URI) {
+  console.error('[startup] MONGODB_URI is required but not set. Set MONGODB_URI in backend-auth/.env');
+  process.exit(1);
+}
+if (!JWT_SECRET) {
+  console.error('[startup] JWT_SECRET is required but not set. Set JWT_SECRET in backend-auth/.env');
+  process.exit(1);
+}
 
 mongoose
   .connect(MONGODB_URI)
@@ -40,7 +53,7 @@ mongoose
 // Initialize Firebase Admin (will throw if creds missing)
 try {
   initFirebaseAdmin();
-  console.log('Firebase Admin initialized');
+  console.log('Firebase Admin initialized successfully');
 } catch (e) {
   console.warn('Firebase Admin not initialized:', e.message);
 }
@@ -51,4 +64,42 @@ app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/auth/google', googleRoutes);
 
-app.listen(PORT, () => console.log(`Auth server listening on ${PORT}`));
+// Robust port binding with retry on EADDRINUSE
+async function listenWithRetry(startPort = PORT, maxAttempts = 10) {
+  let port = startPort;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await new Promise((resolve, reject) => {
+        const server = http.createServer(app);
+        server.once('error', (err) => {
+          server.removeAllListeners();
+          if (err && err.code === 'EADDRINUSE') {
+            return reject(err);
+          }
+          return reject(err);
+        });
+        server.listen(port, () => {
+          console.log(`Backend Auth Service Running on PORT: ${port}`);
+          resolve();
+        });
+      });
+      // success -> exit function
+      return;
+    } catch (err) {
+      if (err && err.code === 'EADDRINUSE') {
+        console.warn(`Port ${port} in use. Retrying on ${port + 1} (attempt ${attempt}/${maxAttempts})...`);
+        port += 1;
+        continue;
+      }
+      // Non-EADDRINUSE error: rethrow
+      throw err;
+    }
+  }
+  console.error(`Failed to bind to a port after ${maxAttempts} attempts starting at ${startPort}.`);
+  process.exit(1);
+}
+
+listenWithRetry().catch((e) => {
+  console.error('Server failed to start:', e);
+  process.exit(1);
+});

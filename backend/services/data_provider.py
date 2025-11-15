@@ -1,7 +1,13 @@
 # backend/services/data_provider.py
 import logging
-from playwright.sync_api import sync_playwright
 import json
+
+try:
+    from playwright.sync_api import sync_playwright  # type: ignore
+    _PLAYWRIGHT_OK = True
+except Exception as _e:
+    _PLAYWRIGHT_OK = False
+    logging.warning(f"Playwright not available: {_e}")
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -41,36 +47,22 @@ class DataProvider:
             api_url = f"{self.API_BASE}/option-chain-equities?symbol={symbol}"
         
         logger.info(f"Launching headless FIREFOX for {symbol}...")
+        if not _PLAYWRIGHT_OK:
+            return {"error": True, "message": "playwright_unavailable"}
         try:
-            with sync_playwright() as p:
-                # --- THIS IS THE ONLY LINE WE CHANGED ---
+            with sync_playwright() as p:  # type: ignore
                 browser = p.firefox.launch(headless=True)
-                # ----------------------------------------
                 context = browser.new_context(extra_http_headers=self.HEADERS)
                 page = context.new_page()
-                
-                # 1. PRIME THE SESSION: Visit the homepage
                 logger.info(f"Priming session at {self.BASE_URL}")
-                # --- INCREASED TIMEOUT ---
                 page.goto(self.BASE_URL, timeout=60000)
-                
-                # 2. FETCH THE API DATA: Now go to the API URL
                 logger.info(f"Fetching option chain for: {symbol} from {api_url}")
-                # --- INCREASED TIMEOUT ---
                 page.goto(api_url, timeout=60000)
-                
-                # 3. EXTRACT THE JSON
-                content = page.inner_text('pre') # Directly get text from the <pre> tag
+                content = page.inner_text('pre')
                 data = json.loads(content)
-                
                 browser.close()
                 logger.info(f"Successfully fetched data for {symbol} (Playwright/Firefox)")
                 return data
         except Exception as e:
             logger.error(f"Playwright failed to fetch {symbol}: {e}")
-            # This will show the full JSON error if it's not a JSONDecodeError
-            try:
-                logger.error(f"Page content was: {page.content()[:200]}...")
-            except:
-                pass
-            return {"error": True, "message": f"Playwright failed: {e}"}
+            return {"error": True, "message": f"playwright_failed: {e}"}

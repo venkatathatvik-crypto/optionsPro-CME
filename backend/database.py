@@ -12,6 +12,15 @@ if not loaded:
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+# Fix malformed values like: DATABASE_URL=DATABASE_URL="postgres://..."
+if DATABASE_URL and "DATABASE_URL=" in DATABASE_URL:
+    # take the last segment after the last '='
+    DATABASE_URL = DATABASE_URL.split("=", 1)[-1]
+
+# Strip surrounding quotes if present
+if DATABASE_URL and ((DATABASE_URL.startswith('"') and DATABASE_URL.endswith('"')) or (DATABASE_URL.startswith("'") and DATABASE_URL.endswith("'"))):
+    DATABASE_URL = DATABASE_URL[1:-1]
+
 # The asyncpg driver is needed for FastAPI, but SQLAlchemy uses psycopg2
 # We will modify the URL for standard SQLAlchemy sync operations
 db_url = DATABASE_URL

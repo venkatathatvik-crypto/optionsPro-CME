@@ -10,6 +10,7 @@ import { Home } from './pages/Home';
 import { SignIn } from './pages/SignIn';
 import { SignUp } from './pages/SignUp';
 import { Profile } from './pages/Profile';
+import { Analytics } from './pages/Analytics';
 
 function App() {
   const activeView = useAppStore((state) => state.activeView);
@@ -48,24 +49,7 @@ function App() {
           {activeView === 'home' && <Home />}
           {activeView === 'dashboard' && <Dashboard />}
           {activeView === 'optionchain' && <OptionChainTable />}
-          {activeView === 'analytics' && (
-            <div className="p-6 text-center">
-              <h2
-                className={`text-3xl font-bold ${
-                  theme === 'dark' ? 'text-white' : 'text-gray-800'
-                }`}
-              >
-                Analytics
-              </h2>
-              <p
-                className={`mt-4 ${
-                  theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                }`}
-              >
-                Coming Soon...
-              </p>
-            </div>
-          )}
+          {activeView === 'analytics' && <Analytics />}
           {activeView === 'portfolio' && <Portfolio />}
           {activeView === 'signin' && <SignIn />}
           {activeView === 'signup' && <SignUp />}
